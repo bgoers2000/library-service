@@ -190,27 +190,49 @@ var myBookArray = [{
 }]
 
 router.use(bodyParser.urlencoded({ extended: true,limit: '5mb'}));
+// router.use(bodyParser.json({ extended: true,limit: '5mb'}));
 // router.use(bodyParser.json({ extended: true }));
 
 
 // CREATES A NEW BOOK IN LIBRARY
+// router.post('/', function (req, res) {
+//   console.log(req);
+//   console.log(req.body);
+//   Library.create({
+//       coverImage : req.body.coverImage,
+//       title : req.body.title,
+//       author : req.body.author,
+//       publishDate : new Date(req.body.publishDate.toString()),
+//       numberOfPages : req.body.numberOfPages,
+//       haveRead: req.body.haveRead
+//     },
+//     function (err, book) {
+//       if (err) return res.status(500).send("There was a problem adding the information to the database.");
+//       res.status(200).send(book);
+//     });
+// });
+
 router.post('/', function (req, res) {
-  console.log(req);
-  console.log(req.body);
-  Library.create({
-      coverImage : req.body.coverImage,
-      title : req.body.title,
-      author : req.body.author,
-      publishDate : new Date(req.body.publishDate.toString()),
-      numberOfPages : req.body.numberOfPages,
-      haveRead: req.body.haveRead
-    },
+  for (var i = 0; i < req.body.books.length; i++) {
+    req.body.books[i].numberOfPages = parseInt(req.body.books[i].numberOfPages)
+    req.body.books[i].publishDate = new Date(req.body.books[i].publishDate.toString())
+  }
+  Library.collection.insert(req.body.books,
     function (err, book) {
       if (err) return res.status(500).send("There was a problem adding the information to the database.");
       res.status(200).send(book);
     });
 });
 
+
+router.get('/paginate/:page/:numResultsPerPage', function(req, res) {
+    var perPage = parseInt(req.params.numResultsPerPage)
+    var page = req.params.page || 1
+    Library.find({}).skip((perPage * page) - perPage).limit(perPage).exec(function(err, books) {
+      if (err) return res.status(500).send("There was a problem.");
+      res.status(200).send(books);
+        })
+})
 
 // GETS A RANDOM BOOK OUT OF THE DATABASE
 router.get('/randomBook', function (req, res) {
@@ -221,9 +243,16 @@ router.get('/randomBook', function (req, res) {
       });
 })
 
+router.get('/tenRandomBooks', function (req, res) {
+    Library.aggregate([{$sample:{size: 10}}],
+      function (err, book) {
+        if (err) return res.status(500).send("There was a problem.");
+        res.status(200).send(book);
+      });
+})
+
 // RETURNS ALL BOOKS IN THE DATABASE
 router.get('/', function (req, res) {
- console.log('hit');
  Library.find({}, function (err, books) {
      if (err) return res.status(500).send("There was a problem finding books in library.");
      res.status(200).send(books);
@@ -231,25 +260,48 @@ router.get('/', function (req, res) {
 });
 
 router.get('/:id', function (req, res) {
- console.log('hit');
  Library.findById(req.params.id, function (err, books) {
      if (err) return res.status(500).send("There was a problem finding books in library.");
      res.status(200).send(books);
  });
 });
 
+router.get('/search/:title/:author/:numberOfPages/:publishDate', function (req, res) {
+  var searchFields = []
+  var regEx = /[|]/gi
+  if(req.params.title !== 'undefined'){
+    var adjustedSearchParam = "";
+    adjustedSearchParam = req.params.title.replace(regEx,"|")
+    searchFields.push({title:{ $regex: new RegExp(adjustedSearchParam), $options: 'igx' }})
+  }
+  if(req.params.author !== 'undefined'){
+    var adjustedSearchParam = "";
+    adjustedSearchParam = req.params.title.replace(regEx,"|")
+    searchFields.push({author:{ $regex: new RegExp(req.params.author), $options: 'igx' }})
+  }
+  if(req.params.numberOfPages !== 'undefined'){
+    searchFields.push({numberOfPages: req.params.numberOfPages})
+  }
+  if(req.params.publishDate !== 'undefined'){
+    searchFields.push({publishDate: req.params.publishDate})
+  }
+  //let text = req.params.search, pattern = new RegExp(text), patternMatch = { $regex: pattern, $options: 'igx' }, ;
+ Library.find({$or: searchFields}, function (err, books) {
+     if (err) return res.status(500).send("There was a problem finding books in library.");
+     res.status(200).send(books);
+ });
+});
+
+
 // http://127.0.0.1:3002/Library/5b5246c2d90da3287d1cd22d
 //UPDATES A BOOK WITH SELECTED
 router.put('/:id',function(req,res){
 
+
   Library.findByIdAndUpdate(req.params.id,{title:req.body.title,author:req.body.author,publishDate:new Date(req.body.publishDate.toString()),numberOfPages:req.body.numberOfPages,haveRead:req.body.haveRead},{new:true},function(err,book){
     if(err){
-      console.log("if");
       return res.status(500).send("There was a problem updating the book");
     }else{
-      console.log("else");
-      console.log(book);
-      console.log(res.status(200));
       res.status(200).send("Book by " + book.title + " was updated.")
     }
   })
@@ -259,7 +311,6 @@ router.put('/:id',function(req,res){
 //DELETES A BOOK WITH SELECTED ID
 router.delete('/:id', function (req, res) {
     Library.findByIdAndRemove(req.params.id, function (err, book) {
-      console.log(req.params.id);
         if (err) return res.status(500).send("There was a problem deleting the book.");
         res.status(200).send("Book by "+ book.title +" was deleted.");
     });

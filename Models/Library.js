@@ -8,6 +8,6 @@ var LibrarySchema = new mongoose.Schema({
   publishDate: Date,
   haveRead: Boolean
 });
-
+// LibrarySchema.collection.createIndex( { title: "text" } )
 
 module.exports = mongoose.model('Library',LibrarySchema);
